@@ -91,6 +91,7 @@ function localhost(...$hostnames)
  * Load list of hosts from file
  *
  * @param string $file
+ * @return Proxy
  */
 function inventory($file)
 {
@@ -98,9 +99,12 @@ function inventory($file)
     $fileLoader = new FileLoader();
     $fileLoader->load($file);
 
-    foreach ($fileLoader->getHosts() as $host) {
+    $hosts = $fileLoader->getHosts();
+    foreach ($hosts as $host) {
         $deployer->hosts->set($host->getHostname(), $host);
     }
+
+    return new Proxy($hosts);
 }
 
 /**
@@ -165,8 +169,8 @@ function task($name, $body = null)
 /**
  * Call that task before specified task runs.
  *
- * @param string $it
- * @param string $that
+ * @param string $it The task before $that should be run.
+ * @param string $that The task to be run.
  */
 function before($it, $that)
 {
@@ -179,8 +183,8 @@ function before($it, $that)
 /**
  * Call that task after specified task runs.
  *
- * @param string $it
- * @param string $that
+ * @param string $it The task after $that should be run.
+ * @param string $that The task to be run.
  */
 function after($it, $that)
 {
@@ -193,13 +197,13 @@ function after($it, $that)
 /**
  * Setup which task run on failure of first.
  *
- * @param string $it
- * @param string $that
+ * @param string $it The task which need to fail so $that should be run.
+ * @param string $that The task to be run.
  */
 function fail($it, $that)
 {
     $deployer = Deployer::get();
-    $deployer['fail']->set($it, $that);
+    $deployer->fail->set($it, $that);
 }
 
 /**
@@ -254,9 +258,12 @@ function cd($path)
 function within($path, $callback)
 {
     $lastWorkingPath = get('working_path', '');
-    set('working_path', parse($path));
-    $callback();
-    set('working_path', $lastWorkingPath);
+    try {
+        set('working_path', parse($path));
+        $callback();
+    } finally {
+        set('working_path', $lastWorkingPath);
+    }
 }
 
 /**
@@ -394,15 +401,11 @@ function roles(...$roles)
  */
 function invoke($task)
 {
-    $informer = Deployer::get()->informer;
-    $task = Deployer::get()->tasks->get($task);
-    $input = Context::get()->getInput();
-    $output = Context::get()->getOutput();
-    $host = Context::get()->getHost();
+    $hosts = [Context::get()->getHost()];
+    $tasks = Deployer::get()->scriptManager->getTasks($task, $hosts);
 
-    $informer->startTask($task);
-    $task->run(new Context($host, $input, $output));
-    $informer->endTask($task);
+    $executor = Deployer::get()->seriesExecutor;
+    $executor->run($tasks, $hosts);
 }
 
 /**

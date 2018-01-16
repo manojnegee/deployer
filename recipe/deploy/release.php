@@ -94,7 +94,7 @@ set('release_path', function () {
 });
 
 
-desc('Prepare release');
+desc('Prepare release. Clean up unfinished releases and prepare next release');
 task('deploy:release', function () {
     cd('{{deploy_path}}');
 
@@ -106,6 +106,10 @@ task('deploy:release', function () {
         run('rm release'); // Delete symlink
     }
 
+    // We need to get releases_list at same point as release_name,
+    // as standard release_name's implementation depends on it and,
+    // if user overrides it, we need to get releases_list manually.
+    $releasesList = get('releases_list');
     $releaseName = get('release_name');
 
     // Fix collisions
@@ -126,8 +130,6 @@ task('deploy:release', function () {
     // Make new release
     run("mkdir $releasePath");
     run("{{bin/symlink}} $releasePath {{deploy_path}}/release");
-
-    $releasesList = get('releases_list');
 
     // Add to releases list
     array_unshift($releasesList, $releaseName);

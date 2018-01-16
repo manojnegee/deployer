@@ -12,15 +12,13 @@ namespace Deployer\Utility;
  */
 class Reporter
 {
-    const ENDPOINT = 'https://requestb.in/r9z34wr9';
+    const ENDPOINT = 'https://deployer.org/api/stats';
 
-    /**
-     * @param array $stats
-     */
     public static function report(array $stats)
     {
         $pid = null;
-        if (extension_loaded('pcntl')) {
+        // make sure function is not disabled via php.ini "disable_functions"
+        if (extension_loaded('pcntl') && function_exists('pcntl_fork')) {
             declare(ticks = 1);
             $pid = pcntl_fork();
         }
@@ -28,7 +26,7 @@ class Reporter
         if (is_null($pid) || $pid === -1) {
             // Fork fails or there is no `pcntl` extension.
             try {
-                Httpie::post(self::ENDPOINT)->body($stats)->send();
+                self::send($stats);
             } catch (\Throwable $e) {
                 // pass
             }
@@ -36,12 +34,20 @@ class Reporter
             // Child process.
             posix_setsid();
             try {
-                Httpie::post(self::ENDPOINT)->body($stats)->send();
+                self::send($stats);
             } catch (\Throwable $e) {
                 // pass
             }
             // Close child process after doing job.
             exit(0);
         }
+    }
+
+    private static function send(array $stats)
+    {
+        Httpie::post(self::ENDPOINT)
+            ->body($stats)
+            ->setopt(CURLOPT_SSL_VERIFYPEER, false)
+            ->send();
     }
 }
